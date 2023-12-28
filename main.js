@@ -3,16 +3,23 @@ const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const { executablePath } = require('puppeteer');
 const { NodeHtmlMarkdown } = require('node-html-markdown');
 const fs = require('fs');
-const axios = require('axios');
 const config = require('./config');
+const { changeLinks, downloadImages, delay } = require('./utils');
 pup.use(StealthPlugin());
 
 async function createData() {
   try {
     if (!directoryExists('./data')) {
       fs.mkdir('./data', (err) => {
-        if (err) throw err;
-        else console.log('Data directory created');
+        if (err) console.log(`[-] Data directory did not created!`);
+        else console.log(`[+] Data directory is created`);
+      });
+    }
+    await delay(1);
+    if (!directoryExists(`./data/${config.directory}`)) {
+      fs.mkdir(`./data/${config.directory}`, (err) => {
+        if (err) console.log(`[-] Project directory did not created!`);
+        else console.log(`[+] Project directory is created`);
       });
     }
   } catch (err) {
@@ -64,7 +71,7 @@ async function main() {
     // click on sign-in button
     await page.click('input[name="commit"]');
     // wait for 5 seconds
-    await page.waitForTimeout(5000);
+    await page.waitForTimeout(2000);
     // scripe the project
     await scripeProject(page);
     // wait for 10 seconds and close the browser
@@ -96,6 +103,9 @@ async function scripeProject(page) {
     return html;
   });
   const descriptionMark = NodeHtmlMarkdown.translate(projectDescription);
+  // download the images from mark down code and change the urls
+  let description = await downloadImages(descriptionMark);
+  description = await changeLinks(page, description);
 
   // get the project tasks
   const tasks = await page.evaluate(() => {
@@ -107,26 +117,19 @@ async function scripeProject(page) {
 
     return tasksHtml;
   });
-
+  // loop over tasks and convert it into mark down code
   let tasksMark = '';
   tasks.forEach((task) => {
     tasksMark += NodeHtmlMarkdown.translate(task);
     tasksMark += `\n\n<br><br>============================================<br><br>\n\n`;
   });
-
-  const fullProject = `${titleMark}\n<br><br><br>\n${descriptionMark}\n<br><br>\n\n## Tasks\n<br>\n\n\n${tasksMark}`;
-
-  writeInAfile(
-    './data/' +
-      titleMark
-        .replaceAll('#', '')
-        .replaceAll('\\', '_')
-        .replaceAll('.', '_')
-        .replaceAll(' ', '_')
-        .replaceAll(',', '_') +
-      '.md',
-    fullProject
-  );
+  // download the images and change the urls from mark down code
+  tasksMark = await downloadImages(tasksMark);
+  tasksMark = await changeLinks(page, tasksMark);
+  // concatenate the mark down codes
+  const fullProject = `${titleMark}\n\n<br><br><br>\n\n${description}\n\n<br><br>\n\n## Tasks\n\n<br>\n\n\n${tasksMark}`;
+  // make the readme file with the mark down code
+  writeInAfile(`./data/${config.directory}/README.md`, fullProject);
 }
 
 main();
