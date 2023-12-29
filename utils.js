@@ -2,6 +2,7 @@
 
 const fs = require('fs');
 const https = require('https');
+const chalk = require('chalk');
 const config = require('./config');
 
 function findLinks(markdown) {
@@ -49,15 +50,15 @@ async function changeLinks(page, markdown) {
 
       if (url[0] === '/') {
         const base = 'https://intranet.alxswe.com' + url;
-        console.log(`[*] Visiting a short url: ${base}`);
+        console.log(chalk.yellow(`[*] Visiting a short url: ${base}`));
         await page.goto(base, { waitUntil: 'domcontentloaded' });
         const realUrl = await page.url();
         await page.goBack();
-        console.log(`[+] Returned to the main page`);
+        console.log(chalk.yellow(`[+] Returned to the main page`));
         markdown = await markdown.replace(linkToRegular(url), realUrl);
-        console.log(`[+] MarkDown code manipulated`);
+        console.log(chalk.bold.green(`[+] MarkDown code manipulated`));
       } else {
-        console.log('Url do not start with / : ' + url);
+        console.log(chalk.gray(`[-] Url do not start with slash : ${url}`));
       }
     }
   }
@@ -109,16 +110,19 @@ async function downloadImages(markdown) {
   const images = findImages(markdown);
   if (images && images.length > 0) {
     for (let i = 0; i < images.length; i++) {
+      const millis = new Date().getTime();
       const url = findUrl(images[i])[0]
         .replace(']', '')
         .replace('(', '')
         .replace(')', '');
-      const extension = extractExt(url);
-      const dest = `./data/${config.directory}/images/${i}${extension}`;
+      const extension = extractExt(url).split(/[\?,;&@]/)[0];
+      console.log(chalk.green(`[*] Image extension ${extension}`));
+      const dest = `./data/${config.directory}/images/${millis}${extension}`;
       // create directories
       fs.mkdir(`./data/${config.directory}/images`, (err) => {
-        if (err) console.log(`[-] Images directory did not created!`);
-        else console.log(`[+] Images directory is created`);
+        if (err)
+          console.log(chalk.gray(`[-] Images directory did not created!`));
+        else console.log(chalk.bold.green(`[+] Images directory is created`));
       });
 
       await delay(1);
@@ -127,12 +131,12 @@ async function downloadImages(markdown) {
       let downloaded = false;
       await downloadImage(url, dest)
         .then(() => {
-          console.log(`[+] Image ${i} downloaded.`);
+          console.log(chalk.bold.green(`[+] Image ${millis} downloaded.`));
           downloaded = true;
         })
         .then((err) => {
           if (err) {
-            console.log(`[-] Image ${i} did not downloaded!`);
+            console.log(chalk.gray(`[-] Image ${millis} did not downloaded!`));
             downloaded = false;
           }
         });
@@ -146,7 +150,10 @@ async function downloadImages(markdown) {
           .replaceAll('*', '\\*')
           .replaceAll('+', '\\+');
         const regex = new RegExp(reg, 'gm');
-        markdown = await markdown.replace(regex, `./images/${i}${extension}`);
+        markdown = await markdown.replace(
+          regex,
+          `./images/${millis}${extension}`
+        );
       }
     }
   }

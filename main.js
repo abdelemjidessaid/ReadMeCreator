@@ -3,6 +3,7 @@ const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const { executablePath } = require('puppeteer');
 const { NodeHtmlMarkdown } = require('node-html-markdown');
 const fs = require('fs');
+const chalk = require('chalk');
 const config = require('./config');
 const { changeLinks, downloadImages, delay } = require('./utils');
 pup.use(StealthPlugin());
@@ -11,19 +12,20 @@ async function createData() {
   try {
     if (!directoryExists('./data')) {
       fs.mkdir('./data', (err) => {
-        if (err) console.log(`[-] Data directory did not created!`);
-        else console.log(`[+] Data directory is created`);
+        if (err) console.log(chalk.gray(`[-] Data directory did not created!`));
+        else console.log(chalk.bold.green(`[+] Data directory is created`));
       });
     }
     await delay(1);
     if (!directoryExists(`./data/${config.directory}`)) {
       fs.mkdir(`./data/${config.directory}`, (err) => {
-        if (err) console.log(`[-] Project directory did not created!`);
-        else console.log(`[+] Project directory is created`);
+        if (err)
+          console.log(chalk.gray(`[-] Project directory did not created!`));
+        else console.log(chalk.bold.green(`[+] Project directory is created`));
       });
     }
   } catch (err) {
-    console.log('Data directory did not created');
+    console.log(chalk.gray(`[-] Data directory did not created!`));
   }
 }
 
@@ -42,7 +44,7 @@ function writeInAfile(fileName, content) {
   try {
     fs.writeFile(fileName, content, (err) => {
       if (err) throw err;
-      else console.log('[*] You file is created.');
+      else console.log(chalk.bold.green('[+] You file is created.'));
     });
   } catch (err) {
     console.error('Error occured while write the readme file:', err);
@@ -59,6 +61,7 @@ async function main() {
   try {
     const page = await browser.newPage();
     // go to sign-in page
+    console.log(chalk.yellow(`[*] Visiting the SignIn page`));
     await page.goto('https://intranet.alxswe.com/auth/sign_in');
     // write the email
     await page.focus('input[name="user[email]"]');
@@ -69,10 +72,12 @@ async function main() {
     // wait for 1 second and go on
     await page.waitForTimeout(1000);
     // click on sign-in button
+    console.log(chalk.yellow(`[*] Submiting...`));
     await page.click('input[name="commit"]');
     // wait for 5 seconds
     await page.waitForTimeout(2000);
     // scripe the project
+    console.log(chalk.yellow(`[*] Visiting the Project page`));
     await scripeProject(page);
     // wait for 10 seconds and close the browser
     await page.waitForTimeout(1000);
@@ -127,7 +132,7 @@ async function scripeProject(page) {
   tasksMark = await downloadImages(tasksMark);
   tasksMark = await changeLinks(page, tasksMark);
   // concatenate the mark down codes
-  const fullProject = `${titleMark}\n\n<br><br><br>\n\n${description}\n\n<br><br>\n\n## Tasks\n\n<br>\n\n\n${tasksMark}`;
+  const fullProject = `${titleMark}\n\n<br><br><br>\n\n${description}\n\n<br><br>\n\n## Tasks\n\n<br>\n\n\n${tasksMark}\n\n<br><br>[-> Abdelemjid Essaid](https://github.com/abdelemjidessaid)`;
   // make the readme file with the mark down code
   writeInAfile(`./data/${config.directory}/README.md`, fullProject);
 }
