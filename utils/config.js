@@ -1,6 +1,6 @@
 module.exports = {
-  email: 'your email', // your email
-  password: 'your password', // your password
+  email: '', // your email
+  password: '', // your password
   website: 'https://intranet.alxswe.com', // do not change this link
   projectLink: 'https://intranet.alxswe.com/projects/235', // the project link
   directory: 'simple_shell', // name of directory to save in

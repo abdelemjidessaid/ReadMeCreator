@@ -4,8 +4,8 @@ const { executablePath } = require('puppeteer');
 const { NodeHtmlMarkdown } = require('node-html-markdown');
 const fs = require('fs');
 const chalk = require('chalk');
-const config = require('./config');
-const { changeLinks, downloadImages, delay } = require('./utils');
+const config = require('./utils/config');
+const { changeLinks, downloadImages, delay } = require('./utils/func');
 pup.use(StealthPlugin());
 
 async function createData() {
