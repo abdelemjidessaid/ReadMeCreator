@@ -2,6 +2,7 @@
 
 const fs = require('fs');
 const https = require('https');
+const http = require('http');
 const chalk = require('chalk');
 const config = require('./config');
 
@@ -37,7 +38,7 @@ function linkToRegular(link) {
   return new RegExp(reg, 'gm');
 }
 
-async function changeLinks(page, markdown) {
+async function changeLinks(page, markdown, project_link) {
   const links = findLinks(markdown);
   if (links && links.length > 0) {
     for (let i = 0; i < links.length; i++) {
@@ -50,11 +51,26 @@ async function changeLinks(page, markdown) {
 
       if (url[0] === '/') {
         const base = 'https://intranet.alxswe.com' + url;
-        console.log(chalk.yellow(`[*] Visiting a short url: ${base}`));
-        await page.goto(base, { waitUntil: 'domcontentloaded' });
-        const realUrl = await page.url();
-        await page.goBack();
-        console.log(chalk.yellow(`[+] Returned to the main page`));
+        console.log(chalk.yellow(`[*] -> Visiting a short url: ${base}`));
+        let realUrl = base;
+        try {
+          await page.goto(base, {
+            waitUntil: 'domcontentloaded',
+            timeout: 60000,
+          });
+          realUrl = await page.url();
+        } catch (error) {
+          console.log(chalk.white.bgRed(`[-] Can not get the real url !`));
+        }
+        await page.waitForTimeout(1000);
+        try {
+          await page.goto(project_link, { waitUntil: 'domcontentloaded' });
+          console.log(chalk.cyan(`[*] <- Returned to the main page`));
+        } catch (error) {
+          console.log(chalk.white.bgRed(`[!] Can not go to the main page`));
+          await page.goBack({ waitUntil: 'domcontentloaded' });
+        }
+        // replace the short url with the real one
         markdown = await markdown.replace(linkToRegular(url), realUrl);
         console.log(chalk.bold.green(`[+] MarkDown code manipulated`));
       } else {
@@ -106,22 +122,49 @@ async function downloadImage(url, dest) {
   });
 }
 
-async function downloadImages(markdown) {
+async function downloadImageHttp(url, dest) {
+  return new Promise((resolve, reject) => {
+    const file = fs.createWriteStream(dest);
+
+    http
+      .get(url, (response) => {
+        response.pipe(file);
+
+        file.on('finish', () => {
+          file.close();
+          resolve();
+        });
+
+        file.on('error', (error) => {
+          fs.unlink(dest, () => {
+            reject(error);
+          });
+        });
+      })
+      .on('error', (error) => {
+        reject(error);
+      });
+  });
+}
+
+async function downloadImages(markdown, directoryName) {
   const images = findImages(markdown);
   if (images && images.length > 0) {
     for (let i = 0; i < images.length; i++) {
       const millis = new Date().getTime();
-      const url = findUrl(images[i])[0]
+      let url = findUrl(images[i])[0]
         .replace(']', '')
         .replace('(', '')
         .replace(')', '');
+      if (url && url[0] === '/') url = config.website + url;
+      console.log(chalk.yellow(`[*] Image url ${chalk.gray(url)}`));
       const extension = extractExt(url).split(/[\?,;&@]/)[0];
-      console.log(chalk.green(`[*] Image extension ${extension}`));
-      const dest = `./data/${config.directory}/images/${millis}${extension}`;
+      console.log(chalk.yellow(`[*] Image extension ${chalk.gray(extension)}`));
+      const dest = `./data/${directoryName}/images/${millis}${extension}`;
       // create directories
-      fs.mkdir(`./data/${config.directory}/images`, (err) => {
+      fs.mkdir(`./data/${directoryName}/images`, (err) => {
         if (err)
-          console.log(chalk.gray(`[-] Images directory did not created!`));
+          console.log(chalk.green(`[+] Images directory already exists`));
         else console.log(chalk.bold.green(`[+] Images directory is created`));
       });
 
@@ -129,17 +172,53 @@ async function downloadImages(markdown) {
 
       // download the image
       let downloaded = false;
-      await downloadImage(url, dest)
-        .then(() => {
-          console.log(chalk.bold.green(`[+] Image ${millis} downloaded.`));
-          downloaded = true;
-        })
-        .then((err) => {
-          if (err) {
-            console.log(chalk.gray(`[-] Image ${millis} did not downloaded!`));
-            downloaded = false;
-          }
-        });
+      try {
+        await downloadImage(url, dest)
+          .then(() => {
+            console.log(
+              chalk.bold.green(
+                `[+] Image ${chalk.bold.cyan(millis)} downloaded.`
+              )
+            );
+            downloaded = true;
+          })
+          .then((err) => {
+            if (err) {
+              console.log(
+                chalk.gray(
+                  `[-] Image ${chalk.bold.cyan(millis)} did not downloaded!`
+                )
+              );
+              downloaded = false;
+            }
+          });
+      } catch (err) {
+        if (err.code === 'ERR_INVALID_PROTOCOL') {
+          await downloadImageHttp(url, dest)
+            .then(() => {
+              console.log(
+                chalk.bold.green(
+                  `[+] Image ${chalk.bold.cyan(millis)} downloaded. With HTTP`
+                )
+              );
+              downloaded = true;
+            })
+            .then((err) => {
+              if (err) {
+                console.log(
+                  chalk.gray(
+                    `[-] Image ${chalk.bold.cyan(
+                      millis
+                    )} did not downloaded! With HTTP`
+                  )
+                );
+                downloaded = false;
+              }
+            });
+        } else {
+          console.error(err);
+        }
+      }
       //  if the image is downloaded replace it in markdown code
       if (downloaded) {
         let reg = url;
